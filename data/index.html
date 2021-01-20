@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RGB Table</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <h1>Led Tafel</h1>
+    <div class = "container">
+        <p>Table state: <strong>%POWERED%</strong></p>
+        <p><a href="/on"><button class="button">ON</button></a></p>
+        <p><a href="/off"><button class="button button2">OFF</button></a></p>
+    </div>
+    <div class = "container">
+        <p>Table mode: <strong>%MODE%</strong></p>
+        <p><a href="/mode?m=glitter"><button class="button">Glitter</button></a></p>
+        <p><a href="/mode?m=rain"><button class="button">Rain</button></a></p>
+        <p><a href="/mode?m=rainbow"><button class="button">Rainbow</button></a></p>
+        <p><a href="/mode?m=solid"><button class="button">Solid</button></a></p>
+        <p><a href="/mode?m=all"><button class="button">Loop</button></a></p>
+    </div>
+    <div class = "container">
+        <p>Table color: <strong>%RGBCOLOR%</strong></p>
+        <p><a href="/color"><button class="button">Color Picker</button></a></p>
+        <p><a href="/speed"><button class="button">Change Speed</button></a></p>
+        <p><a href="/brightness"><button class="button">Change Brightness</button></a></p>
+    </div>
+
+</body>
+</html>

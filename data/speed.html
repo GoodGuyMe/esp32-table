@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RGB Table</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div class = menu>
+        <h2><a href="/">Home</a></h2>
+    </div>
+    <h1>Change all the speeds!</h1>
+    <div class="slidecontainer">
+        <input type="range" min="0" max="255" value="%FREQVALUE%" class="slider" id="freqSlider">
+    </div>
+    <div id="freqSliderOutput"></div>
+    <div class="slidecontainer">
+        <input type="range" min="0" max="255" value="%FADEVALUE%" class="slider" id="fadeSlider">
+    </div>
+    <div id="fadeSliderOutput"></div>
+    <div class="slidecontainer">
+        <input type="range" min="0" max="4096" value="%SPEEDVALUE%" class="slider" id="speedSlider">
+    </div>
+    <div id="speedSliderOutput"></div>
+    <div class="fpscontainer">
+        <input type="range" min="0" max="255" value="%FPSVALUE%" class="slider" id="fpsSlider">
+    </div>
+    <div id="fpsSliderOutput"></div>
+</body>
+<script src="speed.js"></script>
+</html>
