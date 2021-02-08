@@ -5,7 +5,6 @@
  
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
 
 const char* ssid = "Sorry?";
 const char* password = "watzeije?";
@@ -14,8 +13,8 @@ const char* password = "watzeije?";
 
 // Definitions for the led strip
 #define LED_PIN 5 //digital pin 5
-#define NUM_LEDS 588
-#define MAX_BRIGHTNESS 255  
+#define NUM_LEDS 585
+#define MAX_BRIGHTNESS 255
 #define LED_TYPE    WS2812
 #define COLOR_ORDER GRB
 
@@ -26,10 +25,12 @@ int fps = 50; //it takes ~20ms to push all the data to all 579 LEDs so the hard 
 #define animationLength 15000 //milliseconds
 int rainbowSpeed = 100; //bigger = faster rainbow
 
-const int size = NUM_LEDS / 3; //size of the rainbow, divided by 3 for 3 rows of leds
+const int size_of_row = NUM_LEDS / 3; //size of the rainbow, divided by 3 for 3 rows of leds
 
 int frequency = 10; //frequency of rain and glitter flashes
 int fade = 20;
+
+int deltaRainbow = 5; // For snake how short the rainbow should be.
 
 // Determine if the leds should be on or not
 int on = 1;
@@ -47,50 +48,7 @@ int ledColorsSize = 1;
 int program = 0;
 AsyncWebServer server(80);
 
-String state = "On";
-
-String processor(const String& var) {
-  return String();
-}
-
-String colorProcessor(const String& var) {
-  if (var == "RVALUE") {
-    return String(ledColors[0][0]);
-  }
-  if (var == "GVALUE") {
-    return String(ledColors[0][1]);
-  }
-  if (var == "BVALUE") {
-    return String(ledColors[0][2]);
-  }
-  return String();
-}
-
 int brightness = 10;
-
-String brightnessProcessor(const String &var) {
-  if (var == "BRIGHTVALUE") {
-    return String(brightness);
-  }
-  return String();
-}
-
-String speedProcessor(const String& var) {
-  if (var == "FREQVALUE") {
-    return String(frequency);
-  }
-  if (var == "FADEVALUE") {
-    return String(fade);
-  }
-  if (var == "SPEEDVALUE") {
-    return String(rainbowSpeed);
-  }
-  return String();
-}
-
-String r = "01";
-String g = "01";
-String b = "01";
 
 void handleColor(AsyncWebServerRequest *req) {
   int id = 0;
@@ -101,7 +59,14 @@ void handleColor(AsyncWebServerRequest *req) {
       ledColors[i] = ledColors[i + 1];
     }
     ledColorsSize--;
+    ledColors[ledColorsSize] = NULL;
     return;
+  } else if (req->hasParam("del") && req->hasParam("all")) {
+    // Remove all colors;
+    for (int i = 0; i < ledColorsSize; i++) {
+      ledColors[i] = NULL;
+    }
+    ledColorsSize = 0;
   } else if (req->hasParam("id")) {
     // Update color
     id = req->getParam("id")->value().toInt();
@@ -113,6 +78,12 @@ void handleColor(AsyncWebServerRequest *req) {
     }
     id = ledColorsSize;
     ledColorsSize++;
+    
+    if (req->hasParam("rgb")) {
+      // Add 'rgb' color
+      ledColors[id] = NULL;
+      return;
+    }
   } else {
     // just /color was called, do nothing;
     return;
@@ -135,12 +106,15 @@ void handleBrightness(AsyncWebServerRequest *req) {
   }
 }
 
+int snakeInitializationFlag = 1;
+String mode = "all";
+
 void handleMode(AsyncWebServerRequest *req) {
   if(req->hasParam("m")) {
     String input = req->getParam("m")->value();
     if (input.equalsIgnoreCase("all")) {
       program = 0;
-    } 
+    }
     else if (input.equalsIgnoreCase("rain")) {
       program = 1;
     }
@@ -153,6 +127,11 @@ void handleMode(AsyncWebServerRequest *req) {
     else if (input.equalsIgnoreCase("solid")) {
       program = 4;
     }
+    else if (input.equalsIgnoreCase("snakeAI")) {
+      snakeInitializationFlag = 1;
+      program = 5;
+    }
+    mode = input;
   }
 }
 
@@ -169,6 +148,9 @@ void handleSpeeds(AsyncWebServerRequest *req) {
   if (req->hasParam("fps")) {
     fps = req->getParam("fps")->value().toInt();
   }
+  if (req->hasParam("delta")) {
+    deltaRainbow = req->getParam("delta")->value().toInt();
+  }
 }
 
 void handleOff(AsyncWebServerRequest *req) {
@@ -179,15 +161,73 @@ void handleOn(AsyncWebServerRequest *req) {
   on = 1;
 }
 
+String colorsJsonArray() {
+  String jsonArray = "[";
+  for (int i = 0; i < ledColorsSize; i++) {
+    jsonArray += "{ \"id\": \"";
+    jsonArray += String(i);
+    jsonArray += "\", \"r\": \"";
+    CRGB color = ledColors[i];
+    jsonArray += String(color.r);
+    jsonArray += "\", \"g\": \"";
+    jsonArray += String(color.g);
+    jsonArray += "\", \"b\": \"";
+    jsonArray += String(color.b);
+    jsonArray += "\"}";
+    if (i + 1 < ledColorsSize) {
+      jsonArray += ", ";
+    }
+  }
+  jsonArray += "]";
+  return jsonArray;
+}
+
+void getColorsJsonArray(AsyncWebServerRequest *req) {
+  String jsonArray = colorsJsonArray();
+  req->send(200, "application/json", jsonArray);
+}
+
+String speedJson() {
+  String jsonObject = "\"fps\": ";
+  jsonObject += String(fps);
+  jsonObject += ", \"freq\": ";
+  jsonObject += String(frequency);
+  jsonObject += ", \"speed\": ";
+  jsonObject += String(rainbowSpeed);
+  jsonObject += ", \"fade\": ";
+  jsonObject += String(fade);
+  jsonObject += ", \"delta\": ";
+  jsonObject += String(deltaRainbow);
+  return jsonObject;
+}
+
+void getSpeedJson(AsyncWebServerRequest *req) {
+  String jsonObject = "{";
+  jsonObject += speedJson();
+  jsonObject += "\"}";
+  req->send(200, "application/json", jsonObject);
+}
+
+String getMode() {
+  
+}
+
+void getCurrentPreset(AsyncWebServerRequest *req) {
+  String jsonObject = "{";
+  jsonObject += speedJson();
+  jsonObject += ", \"mode\": \"";
+  jsonObject += mode;
+  jsonObject += "\", \"brightness\": ";
+  jsonObject += String(brightness);
+  jsonObject += ", \"colors\":";
+  jsonObject += colorsJsonArray();
+  jsonObject += "}";
+  req->send(200, "application/json", jsonObject);
+}
+
 void setup() {
   delay(50); //because life sucks
-  Serial.begin(115200);  
-
-  // Initialize SPIFFS
-  if(!SPIFFS.begin(true)){
-    Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
-  }
+  Serial.begin(115200);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -198,69 +238,59 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  
+
   Serial.println("");
   Serial.print("Connected to ");
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *req){
-    req->send(SPIFFS, "/index.html", String(), false, processor);
-  });
-
-  // Route to load style.css file
-  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *req){
-    req->send(SPIFFS, "/style.css", "text/css");
-  });
-
-  server.on("/color", HTTP_GET, [](AsyncWebServerRequest *req) {
-    handleColor(req);
-    req->send(SPIFFS, "/color.html", String(), false, colorProcessor);
-  });
-
-  server.on("/color.js", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(SPIFFS, "/color.js", "application/javascript");
-  });
-
-  server.on("/brightness", HTTP_GET, [](AsyncWebServerRequest *req) {
+  server.on("/brightness", HTTP_GET, [](AsyncWebServerRequest *req){
     handleBrightness(req);
-    req->send(SPIFFS, "/brightness.html", String(), false, brightnessProcessor);
+    req->send(200, "text/plain", "Set new brightness!");
   });
 
-  server.on("/brightness.js", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(SPIFFS, "/brightness.js", "application/javascript");
+  server.on("/color", [](AsyncWebServerRequest *req) {
+    handleColor(req);
+    req->send(200, "text/plain", "Set new color");
   });
 
-  server.on("/speed", HTTP_GET, [](AsyncWebServerRequest *req) {
+  server.on("/speed", [](AsyncWebServerRequest *req) {
     handleSpeeds(req);
-    req->send(SPIFFS, "/speed.html", String(), false, speedProcessor);
+    req->send(200, "text/plain", "Set new speed");
   });
 
-  server.on("/speed.js", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(SPIFFS, "/speed.js", "application/javascript");
-  });
-
-  server.on("/mode", HTTP_GET, [](AsyncWebServerRequest *req) {
+  server.on("/mode", [](AsyncWebServerRequest *req) {
     handleMode(req);
-    req->send(SPIFFS, "/index.html", String(), false, processor);
+    req->send(200, "text/plain", "Set new mode");
   });
 
-  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *req) {
+  server.on("/on", [](AsyncWebServerRequest *req) {
     handleOn(req);
-    req->send(SPIFFS, "/index.html", String(), false, processor);
+    req->send(200, "text/plain", "Table on");
   });
 
-  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *req) {
+  server.on("/off", [](AsyncWebServerRequest *req) {
     handleOff(req);
-    req->send(SPIFFS, "/index.html", String(), false, processor);
+    req->send(200, "text/plain", "Table off");
+  });
+
+  server.on("/getColorsArray", [](AsyncWebServerRequest *req) {
+    getColorsJsonArray(req);
+  });
+
+  server.on("/getSpeeds", [](AsyncWebServerRequest *req) {
+    getSpeedJson(req);
+  });
+
+  server.on("/getCurrentPreset", [](AsyncWebServerRequest *req) {
+    getCurrentPreset(req);
   });
 
   server.begin();
   Serial.println("HTTP server started");
-  
-  ledColors[0] = CRGB(1, 255, 1); //make sure each value is at least 1, that's how the program distinguishes between the rain and the rainbow
+
+  ledColors[0] = CRGB(1, 255, 1); //make sure each value is at least 1, that's how the program distinguishes between the rain and the  rainbow
 
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
   FastLED.setBrightness(  MAX_BRIGHTNESS ); // Set the maximum brightness
@@ -270,37 +300,37 @@ void setup() {
   int RGsize = 100; //section between 100% red and 100% green
   int GBsize = 80; //section between 100% green and 100% blue
   int biasSum = BRsize + RGsize + GBsize;
-  BRsize = size * (float(BRsize) / float(biasSum)); //normalize bias
-  RGsize = size * (float(RGsize) / float(biasSum)); //normalize bias
-  GBsize = size * (float(GBsize) / float(biasSum)); //normalize bias
+  BRsize = size_of_row * (float(BRsize) / float(biasSum)); //normalize bias
+  RGsize = size_of_row * (float(RGsize) / float(biasSum)); //normalize bias
+  GBsize = size_of_row * (float(GBsize) / float(biasSum)); //normalize bias
   biasSum = BRsize + RGsize + GBsize;
- 
+
   //makes the sum of the bias the same size as the rainbow, fixes "holes" caused by rounding
-  if (biasSum < size) {
+  if (biasSum < size_of_row) {
     BRsize ++;
     biasSum ++;
-    if (biasSum < size) {
+    if (biasSum < size_of_row) {
       RGsize ++;
       biasSum ++;
-      if (biasSum < size) {
+      if (biasSum < size_of_row) {
         GBsize ++;
         biasSum ++;
       }
     }
   }
-  else if (biasSum > size) {
+  else if (biasSum > size_of_row) {
     BRsize --;
     biasSum --;
-    if (biasSum > size) {
+    if (biasSum > size_of_row) {
       RGsize --;
       biasSum --;
-      if (biasSum > size) {
+      if (biasSum > size_of_row) {
         GBsize --;
         biasSum --;
       }
     }
   }
- 
+
   //generate the rainbow. Uses linear interpolations between points set by the bias
   for (int i = 0; i < BRsize; i++) {
     colorsArray[i] = CRGB( int(round(255 * float(i) / float(BRsize))) ,
@@ -309,23 +339,42 @@ void setup() {
   }
   for (int i = 0; i < RGsize; i++) {
     colorsArray[i + BRsize] = CRGB(int(round(255 - 255 * float(i) / float(RGsize))) , int(round(255 * (float(i) / float(RGsize)))) , 0 );
- 
+
   }
   for (int i = 0; i < GBsize; i++) {
     colorsArray[i + BRsize + RGsize] = CRGB(0, int(round(255 - 255 * float(i) / float(GBsize))) , int(round(255 * (float(i) / float(GBsize)))));
   }
- 
+
   //copy first row onto next two rows
   for (int i = 0; i < NUM_LEDS / 3; i++) {
     colorsArray[i + NUM_LEDS / 3] = colorsArray[i];
     colorsArray[i + 2 * NUM_LEDS / 3] = colorsArray[i];
   }
 }
- 
+unsigned long ledOffset;
+void setLedOffset() {
+  ledOffset = millis() * rainbowSpeed / fps / 100 % NUM_LEDS ; // 0 - NUM_LEDS, calculates how far the generated table should be offset from the starting position for the given time
+}
+
+CRGB getColor(int led, int useLedColors = 1) {
+  if (useLedColors) {
+    CRGB color = ledColors[random8(0, ledColorsSize)];
+    if (color) {
+      return color;
+    }
+  }
+  return colorsArray[(led * deltaRainbow + ledOffset) % NUM_LEDS];
+}
+
 void loop() {
   //a timer is used to set a maximum fps
   unsigned long start = millis(); //start timer
   FastLED.show();
+
+  if (snakeInitializationFlag) {
+      initialize_snake();
+      snakeInitializationFlag = 0;
+  }
 
   if (on) {
     switch(program) {
@@ -351,10 +400,10 @@ void loop() {
         rainbow();
         break;
       case 4:
-        fill_solid(leds, NUM_LEDS, ledColors[0]);
-        delay(1);
-        fill_solid(leds, NUM_LEDS, ledColors[0]);
-        delay(1);
+        fill_solid(leds, NUM_LEDS, getColor(0));
+        break;
+      case 5:
+        snakeAI();
         break;
     }
   }
@@ -408,9 +457,10 @@ void rain() {
       leds[i] = CRGB(0, 0, 0);
     }
   }
+  setLedOffset();
 
   for (int i = 0; i < time_frequency; i++) {
-    leds[topRow[i]] = ledColors[random8(0, ledColorsSize)];
+    leds[topRow[i]] = getColor(i);
   }
 }
 
@@ -443,9 +493,10 @@ void rainStable() {
       leds[i] = CRGB(0, 0, 0);
     }
   }
+  setLedOffset();
   for (int i = 0; i < frequency; i++) {
     
-    leds[topRow[i]] = ledColors[random8(0, ledColorsSize)];
+    leds[topRow[i]] = getColor(i);
   }
 }
  
@@ -463,13 +514,14 @@ void glitter() {
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i].fadeToBlackBy(time_fade);
   }
+  setLedOffset();
  
   for (int i = 0; i < time_frequency; i++) { //turns on LEDs that were selected
     if (random8() + 60 > (millis() % animationLength - 5000) * 0.09 ) { //initial glitter will be rain colored, then quickly become rainbow colored
-      leds[lightToTurnOn[i]] = ledColors[random8(0, ledColorsSize)]; //rain colored
+      leds[lightToTurnOn[i]] = getColor(0); //rain colored
     }
     else {
-      leds[lightToTurnOn[i]] = colorsArray[(lightToTurnOn[i] + ledOffset) % NUM_LEDS]; //rainbow colored
+      leds[lightToTurnOn[i]] = getColor(lightToTurnOn[i], 0); //rainbow colored
     }
   }
 }
@@ -483,18 +535,271 @@ void glitterStable() {
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i].fadeToBlackBy(fade);
   }
+  setLedOffset();
  
   for (int i = 0; i < frequency; i++) { //turns on LEDs that were selected
-    leds[lightToTurnOn[i]] = ledColors[random8(0, ledColorsSize)]; //rain colored
+    leds[lightToTurnOn[i]] = getColor(0); //rain colored
   }
 }
  
 //generic scrolling rainbow
 void rainbow() {
-  unsigned long ledOffset = millis() * rainbowSpeed / fps / 100 % NUM_LEDS ; // 0 - NUM_LEDS, calculates how far the generated table should be offset from the starting position for the given time
+  setLedOffset();
  
   //writes the led array based on the pre-generated table
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = colorsArray[(i + ledOffset) % NUM_LEDS];
+    leds[i] = getColor(i, 0);
   }
+}
+
+// Array of length of the leds, every position correspons to what direction that pixels has to move (iff non black)
+// 0 = No path found
+// 1 = Left
+// 2 = Up
+// 3 = Right
+// 4 = Down
+int bfs[NUM_LEDS];
+
+int apple = 500;
+
+struct Node {
+    Node *next;
+    int led;
+};
+
+struct Node * create_node(int led) {
+  Node *newNode = (Node*)malloc(sizeof(Node));
+  if (!newNode) {
+    Serial.println("No memory for Node");
+  }
+  newNode->next = NULL;
+  newNode->led = led;
+  return newNode;
+}
+
+struct NextIndices {
+  int left;
+  int up;
+  int right;
+  int down;
+};
+
+int mod(int a, int b) {
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+
+struct NextIndices * get_next_indices (int from) {
+  // First see from where 
+  NextIndices *next = (NextIndices*)malloc(sizeof(NextIndices));
+  if (!next) {
+    Serial.println("No memory found for Indices");
+  }
+  if (from < (size_of_row)) {
+    // from is on the first row
+    next->left = mod(from + 1, size_of_row);
+    next->up = -1;
+    next->right = mod(from - 1, size_of_row);
+    next->down = from + size_of_row;
+  }
+  else if (from < (size_of_row * 2)) {
+    // from is on the second row
+    next->left = mod(from + 1, size_of_row) + size_of_row;
+    next->up = from - size_of_row;
+    next->right = mod(from - 1, size_of_row) + size_of_row;
+    next->down = from + size_of_row;
+  }
+  else {
+    // from is on the last row
+    next->left = mod(from + 1, size_of_row) + 2 * size_of_row;
+    next->up = from - size_of_row;
+    next->right = mod(from - 1, size_of_row) + 2 * size_of_row;
+    next->down = -1;
+  }
+  return next;
+}
+
+struct Snake {
+  Snake* next;
+  int led;
+  int* nextMoves;
+};
+
+int nextMoveCounter;
+
+struct Snake *snakeHead = NULL;
+
+void initialize_snake() {
+  if (snakeHead) {
+    free(snakeHead->nextMoves);
+    delete_snake(snakeHead);
+    snakeHead = NULL;
+  }
+  nextMoveCounter = 0;
+  snakeHead = (Snake*)malloc(sizeof(Snake));
+  snakeHead->next = NULL;
+  snakeHead->led = 0;
+  snakeHead->nextMoves = (int*)malloc(sizeof(int) * NUM_LEDS);
+  grow_snake();
+  grow_snake();
+  memset(leds, 0, sizeof(leds));
+  apple = random16(0, NUM_LEDS);
+  leds[apple] = CRGB(255, 0, 0);
+}
+
+void grow_snake() {
+  Snake *newSnakeBlock = (Snake*)malloc(sizeof(Snake));
+  if (!newSnakeBlock) {
+    Serial.println("No memory for snake!");
+  }
+  newSnakeBlock->next = NULL;
+  Snake *tail = snakeHead;
+  while (tail->next) {
+    tail = tail->next;
+  }
+  newSnakeBlock->led = tail->led;
+  tail->next = newSnakeBlock;
+}
+
+void createPath() {
+  int from = apple;
+  nextMoveCounter = 0;
+  while(from != snakeHead->led) {
+    snakeHead->nextMoves[nextMoveCounter] = from;
+    nextMoveCounter++;
+    from = bfs[from];
+  }
+}
+
+void delete_snake(struct Snake *snake) {
+  Serial.print("Deleting snake with led: ");
+  Serial.println(snake->led);
+  if (snake->next) {
+    delete_snake(snake->next);
+    snake->led = 0;
+    snake->next = NULL;
+  }
+  free(snake);
+  snake = NULL;
+  Serial.println("Done deleting");
+}
+
+void moveSnake() {
+  nextMoveCounter--;
+  // Move the head 1 position, the goto place is at snakeHead.nextMove[nextMoveCounter];
+  int lastLed = snakeHead->led;
+  snakeHead->led = snakeHead->nextMoves[nextMoveCounter];
+  if (snakeHead->led < 0 || leds[snakeHead->led] != CRGB(0,0,0)) {
+    if (snakeHead->led == apple) {
+      // Ate apple! grow and go on normally (will recalculate path)
+      grow_snake();
+      apple = random16(0, NUM_LEDS);
+      while (leds[apple] != CRGB(0,0,0)) {
+        apple = random16(0, NUM_LEDS);
+      }
+      leds[apple] = CRGB(255, 0, 0);
+    } else {
+      // Hit snake, restart!
+      Serial.println("Hit the snake or wall: ");
+      free(snakeHead->nextMoves);
+      snakeHead->nextMoves = NULL;
+      delete_snake(snakeHead);
+      snakeHead = NULL;
+      initialize_snake();
+      return;
+    }
+  }
+  setLedOffset();
+  int counter = 0;
+ 
+  leds[snakeHead->led] = getColor(counter);
+  Snake *snake = snakeHead->next;
+  while (snake) {
+    int tempLed = snake->led;
+    snake->led = lastLed;
+    lastLed = tempLed;
+    leds[snake->led] = getColor(++counter);
+    snake = snake->next;
+  }
+  leds[lastLed] = CRGB(0,0,0);
+}
+
+//AI SNAKE!!!
+void snakeAI() {
+  if (!snakeHead) {
+    initialize_snake();
+  }
+  if (nextMoveCounter > 0) {
+    // Path was already found, move the snake (still check for collisions aswell)
+    moveSnake();
+    return;
+  }
+  // Perform breadth first search
+  Node *node = (Node*)malloc(sizeof(Node));
+  node->next = NULL; 
+  node->led = snakeHead->led;
+  Node *lastNode = node;
+
+  // Reset the bfs array
+  memset(bfs, -1, sizeof(bfs));
+  bfs[node->led] = node->led;
+  // Keep looping while node is not NULL
+  while(node) {
+    NextIndices *nextIndices = get_next_indices(node->led);
+    if (nextIndices->left == apple || nextIndices->up == apple || nextIndices->right == apple || nextIndices->down == apple) {
+      // Found the apple! now backtrack to the head of the snake, storing the path in reverse order in nextMoves
+      bfs[apple] = node->led;
+      free(node);
+      free(nextIndices);
+      createPath();
+      moveSnake();
+      return;
+    }
+    if (leds[nextIndices->left] == CRGB(0,0,0) && !(bfs[nextIndices->left] >= 0)) {
+      // Check if to the left is a black led, and it hasn't been discovered yet.
+      bfs[nextIndices->left] = node->led;
+      lastNode->next = create_node(nextIndices->left);
+      lastNode = lastNode->next;
+    }
+    if (leds[nextIndices->right] == CRGB(0,0,0) && !(bfs[nextIndices->right] >= 0)) {
+      // Check if to the left is a black led, and it hasn't been discovered yet.
+      bfs[nextIndices->right] = node->led;
+      lastNode->next = create_node(nextIndices->right);
+      lastNode = lastNode->next;
+    }
+    if (nextIndices->up >= 0 && leds[nextIndices->up] == CRGB(0,0,0) && !(bfs[nextIndices->up] >= 0)) {
+      // Check if to the left is a black led, and it hasn't been discovered yet.
+      bfs[nextIndices->up] = node->led;
+      lastNode->next = create_node(nextIndices->up);
+      lastNode = lastNode->next;
+    }
+    if (nextIndices->down >= 0 && leds[nextIndices->down] == CRGB(0,0,0) && !(bfs[nextIndices->down] >= 0)) {
+      // Check if to the left is a black led, and it hasn't been discovered yet.
+      bfs[nextIndices->down] = node->led;
+      lastNode->next = create_node(nextIndices->down);
+      lastNode = lastNode->next;
+    }
+    Node *tempNode = node;
+    node = node->next;
+    free(tempNode);
+    free(nextIndices);
+  }
+  Serial.println("No path found");
+  // Couldn't find a path! move to the first available position (order being left right up down) and try again, if completly stuck, it moves down (and gets killed)
+  NextIndices *nextIndices = get_next_indices(snakeHead->led);
+  if (leds[nextIndices->left] == CRGB(0,0,0)) {
+    snakeHead->nextMoves[0] = nextIndices->left;
+  }
+  else if (leds[nextIndices->right] == CRGB(0,0,0)) {
+    snakeHead->nextMoves[0] = nextIndices->right;
+  }
+  else if (nextIndices->up >= 0 && leds[nextIndices->up] == CRGB(0,0,0)) {
+    snakeHead->nextMoves[0] = nextIndices->up;
+  }
+  else {
+    snakeHead->nextMoves[0] = nextIndices->down;
+  }
+  free(nextIndices);
+  nextMoveCounter = 1;
+  moveSnake();
 }
