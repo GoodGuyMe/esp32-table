@@ -1,6 +1,8 @@
 # esp32-table
 Arduino project to drive a infinity-mirror led table with ~600 leds. <br> 
 <br>
+![Led Table](https://i.imgur.com/47Dju2b.png)
+
 With the [accompanying app](https://github.com/GoodGuyMe/android-table) or through API calls it's possible to change the lighting.
 Use the folling GET Requests to change the settings on the table:
 * /mode?m=...
@@ -36,4 +38,4 @@ Use the folling GET Requests to change the settings on the table:
 * /getCurrentPreset
   * Gets a json object of every setting currently in use.
   
-_Video with the table comming soon._
+[Link to imgur page](https://imgur.com/a/WQslLr2)
