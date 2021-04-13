@@ -4,6 +4,9 @@ Arduino project to drive a infinity-mirror led table with ~600 leds. <br>
 ![Led Table](https://i.imgur.com/47Dju2b.png)
 
 With the [accompanying app](https://github.com/GoodGuyMe/android-table) or through API calls it's possible to change the lighting.
+  
+[Link to imgur page with a video](https://imgur.com/a/WQslLr2)
+
 Use the folling GET Requests to change the settings on the table:
 * /mode?m=...
   * rain, leds light up at the top, and move downwards as if falling.
@@ -37,5 +40,3 @@ Use the folling GET Requests to change the settings on the table:
   * Get a json object of the freq, fade, speed, fps and delta settings.
 * /getCurrentPreset
   * Gets a json object of every setting currently in use.
-  
-[Link to imgur page](https://imgur.com/a/WQslLr2)
